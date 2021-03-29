@@ -1360,15 +1360,13 @@ public class DeckPicker extends NavigationDrawerActivity implements
         }
     }
 
-    private UndoTaskListener undoTaskListener(boolean isReview) {
-        return new UndoTaskListener(isReview, this);
+    private UndoTaskListener undoTaskListener() {
+        return new UndoTaskListener(this);
     }
     private static class UndoTaskListener extends TaskListenerWithContext<DeckPicker, Card, BooleanGetter> {
-        private final boolean isReview;
 
-        public UndoTaskListener(boolean isReview, DeckPicker deckPicker) {
+        public UndoTaskListener(DeckPicker deckPicker) {
             super(deckPicker);
-            this.isReview = isReview;
         }
 
 
@@ -1386,19 +1384,14 @@ public class DeckPicker extends NavigationDrawerActivity implements
 
         @Override
         public void actualOnPostExecute(@NonNull DeckPicker deckPicker, BooleanGetter voi) {
-            deckPicker.hideProgressBar();
             Timber.i("Undo completed");
-            if (isReview) {
-                Timber.i("Review undone - opening reviewer.");
-                deckPicker.openReviewer();
-            }
+            deckPicker.hideProgressBar();
+            deckPicker.openReviewer();
         }
     }
     private void undo() {
         Timber.i("undo()");
-        String undoReviewString = getResources().getString(R.string.undo_action_review);
-        final boolean isReview = undoReviewString.equals(getCol().undoName(getResources()));
-        TaskManager.launchCollectionTask(new CollectionTask.Undo(), undoTaskListener(isReview));
+        TaskManager.launchCollectionTask(new CollectionTask.Undo(), undoTaskListener());
     }
 
 
