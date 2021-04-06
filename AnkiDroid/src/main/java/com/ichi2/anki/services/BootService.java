@@ -42,10 +42,14 @@ public class BootService extends BroadcastReceiver {
             Timber.d("BootService - Already run");
             return;
         }
+        // Can't use this permission check anymore, not effective at targetSdk=30 & after migration to Scoped Storage
+        /*
         if (!Permissions.hasStorageAccessPermission(context)) {
             Timber.w("Boot Service did not execute - no permissions");
             return;
         }
+        */
+
         // There are cases where the app is installed, and we have access, but nothing exist yet
         Collection col = getColSafe(context);
         if (col == null || col.getDecks() == null) {

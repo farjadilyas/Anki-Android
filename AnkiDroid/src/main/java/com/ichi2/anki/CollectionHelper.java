@@ -18,7 +18,7 @@ package com.ichi2.anki;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.os.Environment;
+
 import android.text.format.Formatter;
 
 import androidx.annotation.NonNull;
@@ -169,6 +169,11 @@ public class CollectionHelper {
         }
     }
 
+    public synchronized void refreshCollection(Context context)
+    {
+        closeCollection(false, "refresh");
+        getCol(context);
+    }
     /**
      * @return Whether or not {@link Collection} and its child database are open.
      */
@@ -236,7 +241,7 @@ public class CollectionHelper {
      */
     @SuppressWarnings("deprecation") // TODO Tracked in https://github.com/ankidroid/Anki-Android/issues/5304
     public static String getDefaultAnkiDroidDirectory() {
-        return new File(Environment.getExternalStorageDirectory(), "AnkiDroid").getAbsolutePath();
+        return StorageMigrator.getInstance().getLegacyAnkiDroidDirectory();
     }
 
     /**
@@ -244,7 +249,8 @@ public class CollectionHelper {
      * @return the path to the actual {@link Collection} file
      */
     public static String getCollectionPath(Context context) {
-        return new File(getCurrentAnkiDroidDirectory(context), COLLECTION_FILENAME).getAbsolutePath();
+        String collectionPath = new File(getCurrentAnkiDroidDirectory(context), COLLECTION_FILENAME).getAbsolutePath();
+        return collectionPath;
     }
 
 

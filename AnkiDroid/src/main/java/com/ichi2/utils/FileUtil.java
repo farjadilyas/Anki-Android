@@ -1,8 +1,11 @@
 package com.ichi2.utils;
 
+import android.app.Activity;
 import android.content.ContentResolver;
 import android.net.Uri;
 import android.os.StatFs;
+import android.provider.DocumentsContract;
+import android.provider.DocumentsProvider;
 
 import com.ichi2.compat.CompatHelper;
 
@@ -10,13 +13,16 @@ import com.ichi2.compat.CompatHelper;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.AbstractMap;
 import java.util.Map;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.documentfile.provider.DocumentFile;
 import timber.log.Timber;
 
 public class FileUtil {
@@ -87,5 +93,139 @@ public class FileUtil {
         }
 
         return new AbstractMap.SimpleEntry<>(fileName.substring(0, index), fileName.substring(index));
+    }
+
+    public static boolean copyFolderUnderScopedStorage(Activity activity, Uri treeUri, File destination, int iter) {
+
+        DocumentFile documentsTree = DocumentFile.fromTreeUri(activity.getApplication(), treeUri);
+        DocumentFile[] files = null;
+        Uri childUri;
+
+        if (documentsTree != null && documentsTree.isDirectory()) {
+            if (!destination.exists()) {
+                destination.mkdirs();
+            }
+
+            files = documentsTree.listFiles();
+
+            for (DocumentFile file : files) {
+                if (file.getName() != null) {
+                    File destFile = new File(destination, file.getName());
+                    Timber.i("src: %s, dest file: %s", file.getUri().getPath(), destFile);
+                    copyFolderUnderScopedStorage(activity, file.getUri(), destFile, iter + 1);
+                }
+            }
+        } else {
+            InputStream in = null;
+            OutputStream out = null;
+
+            try {
+                in = activity.getContentResolver().openInputStream(treeUri);
+                out = new FileOutputStream(destination);
+
+                byte[] buffer = new byte[1024];
+
+                int length;
+                while ((length = in.read(buffer)) > 0)
+                {
+                    out.write(buffer, 0, length);
+                }
+            } catch (Exception e) {
+                try {
+                    in.close();
+                }
+                catch (IOException e1) {
+                    e1.printStackTrace();
+                    return false;
+                }
+
+                try {
+                    out.close();
+                } catch (IOException e1) {
+                    e1.printStackTrace();
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    public static boolean copyFolderUnderLegacyStorage(File source, File destination)
+    {
+        if (source.isDirectory()) {
+            if (!destination.exists()) {
+                destination.mkdirs();
+            }
+
+            String[] files = source.list();
+
+            if (files == null) {
+                return true;
+            }
+            for (String file : files) {
+                File srcFile = new File(source, file);
+                File destFile = new File(destination, file);
+
+                Timber.i("copyFolder(%s, %s)", srcFile.getAbsolutePath(),
+                        destFile.getAbsolutePath());
+
+                copyFolderUnderLegacyStorage(srcFile, destFile);
+            }
+        } else {
+            InputStream in = null;
+            OutputStream out = null;
+
+            try {
+                in = new FileInputStream(source);
+                out = new FileOutputStream(destination);
+
+                byte[] buffer = new byte[1024];
+
+                int length;
+                while ((length = in.read(buffer)) > 0)
+                {
+                    out.write(buffer, 0, length);
+                }
+            } catch (Exception e) {
+                try {
+                    in.close();
+                }
+                catch (IOException e1) {
+                    e1.printStackTrace();
+                    return false;
+                }
+
+                try {
+                    out.close();
+                } catch (IOException e1) {
+                    e1.printStackTrace();
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+
+    public static boolean moveFile(Activity activity, Uri sourceUri, boolean usingScopedStorage, String inputPath, String outputPath) {
+
+        File sourceDirectory = new File(inputPath);
+        File destinationDirectory = new File(outputPath);
+
+        boolean folderCopied = true;
+        if (usingScopedStorage) {
+            folderCopied = copyFolderUnderScopedStorage(activity, sourceUri, destinationDirectory, 0);
+            /*
+            try {
+                DocumentsContract.deleteDocument(activity.getContentResolver(), sourceUri);
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            }*/
+
+        } else {
+            folderCopied = copyFolderUnderLegacyStorage(sourceDirectory, destinationDirectory);
+            //sourceDirectory.delete();
+        }
+        return folderCopied;
     }
 }

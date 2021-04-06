@@ -22,7 +22,6 @@
 package com.ichi2.anki;
 
 import android.Manifest;
-import android.animation.Animator;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -37,13 +36,12 @@ import android.database.SQLException;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Message;
 import android.os.ParcelFileDescriptor;
-import android.provider.Settings;
 
 import com.afollestad.materialdialogs.GravityEnum;
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.snackbar.Snackbar;
 
 import androidx.annotation.NonNull;
@@ -124,7 +122,6 @@ import com.ichi2.libanki.Models;
 import com.ichi2.libanki.Utils;
 import com.ichi2.libanki.importer.AnkiPackageImporter;
 import com.ichi2.libanki.sched.AbstractDeckTreeNode;
-import com.ichi2.libanki.sched.DeckTreeNode;
 import com.ichi2.libanki.sync.CustomSyncServerUrlException;
 import com.ichi2.libanki.sync.Syncer;
 import com.ichi2.libanki.utils.TimeUtils;
@@ -145,7 +142,6 @@ import com.ichi2.utils.JSONException;
 
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -266,6 +262,87 @@ public class DeckPicker extends NavigationDrawerActivity implements
     private final OnClickListener mDeckClickListener = v -> onDeckClick(v, DeckSelectionType.DEFAULT);
 
     private final OnClickListener mCountsClickListener = v -> onDeckClick(v, DeckSelectionType.SHOW_STUDY_OPTIONS);
+
+    /**
+     * If permission obtained, it persists it and migrates to Scoped Storage.
+     * If permission isn't obtained, it defaults to Legacy Storage.
+     * @param intent Returned by Storage Access Framework's ACTION_OPEN_DOCUMENT_TREE Intent, used to determine if permission obtained.
+     */
+    private void onSAFRequestPermissionResult(Intent intent) {
+        Uri uri = intent.getData();
+        StorageMigrator.getInstance().persistUriPermission(this, intent);
+        boolean externalStoragePermissionPersisted = StorageMigrator.getInstance().persistUriPermission(this, intent);
+        Timber.i("External Storage Permission Obtained (SAF): %s", externalStoragePermissionPersisted);
+        if (externalStoragePermissionPersisted) {
+            // Migrate and finish storage set up
+            migrateToScopedStorageAndRefresh(true, uri);
+        } else {
+            // Default to Legacy Storage and finish storage set up
+            completeStorageSetUp();
+        }
+    }
+
+
+    /**
+     * If using Scoped Storage, set it up immediately. <br>
+     * If using Legacy Storage and Storage permission has been acquired, migrate to Scoped Storage.
+     * If using Legacy Storage but Storage permission has not been acquired, request permission via Storage Access
+     * Framework and migrate to Scoped Storage. Else, default to Legacy Storage
+     */
+    private void setUpStorage() {
+        if (StorageMigrator.getInstance().isLegacyStorage(this)) {
+            if (Permissions.hasStorageAccessPermission(this) && getApplicationInfo().targetSdkVersion <= Build.VERSION_CODES.Q) {
+                migrateToScopedStorageAndRefresh(false, null);
+            } else {
+                Timber.i("DeckPicker REQUESTING PERMISSION THROUGH SAF");
+                StorageMigrator.getInstance().requestLegacyStoragePermission(this);
+            }
+        } else {
+            ((AnkiDroidApp) getApplication()).completeStorageSetUp(this);
+        }
+    }
+
+    private void migrateToScopedStorageAndRefresh(boolean usingScopedStorage, Uri sourceUri) {
+        showProgressBar();
+        StorageMigrator.getInstance().migrateToScoped(this, sourceUri, usingScopedStorage);
+        completeStorageSetUp();
+    }
+
+    private void completeStorageSetUp() {
+        ((AnkiDroidApp) getApplication()).completeStorageSetUp(this);
+        CollectionHelper.getInstance().refreshCollection(this);
+        hideProgressBar();
+
+        invalidateOptionsMenu();
+
+        boolean colOpen = CollectionHelper.getInstance().getColSafe(this) != null;
+        SharedPreferences preferences = AnkiDroidApp.getSharedPrefs(getBaseContext());
+
+        Timber.i("colOpen: %b", colOpen);
+        if (colOpen) {
+            // Show any necessary dialogs (e.g. changelog, special messages, etc)
+            showStartupScreensAndDialogs(preferences, 0);
+        } else {
+            // Show error dialogs
+            if (Permissions.hasStorageAccessPermission(this)) {
+                if (!AnkiDroidApp.isSdCardMounted()) {
+                    Timber.i("SD card not mounted");
+                    onSdCardNotMounted();
+                } else if (!CollectionHelper.isCurrentAnkiDroidDirAccessible(this)) {
+                    Timber.i("AnkiDroid directory inaccessible");
+                    Intent i = Preferences.getPreferenceSubscreenIntent(this, "com.ichi2.anki.prefs.advanced");
+                    startActivityForResultWithoutAnimation(i, REQUEST_PATH_UPDATE);
+                    Toast.makeText(this, R.string.directory_inaccessible, Toast.LENGTH_LONG).show();
+                } else if (isFutureAnkiDroidVersion()) {
+                    Timber.i("Displaying database versioning");
+                    showDatabaseErrorDialog(DatabaseErrorDialog.INCOMPATIBLE_DB_VERSION);
+                } else {
+                    Timber.i("Displaying database error");
+                    showDatabaseErrorDialog(DatabaseErrorDialog.DIALOG_LOAD_FAILED);
+                }
+            }
+        }
+    }
 
 
     private void onDeckClick(View v, DeckSelectionType selectionType) {
@@ -446,13 +523,16 @@ public class DeckPicker extends NavigationDrawerActivity implements
             return;
         }
 
-        SharedPreferences preferences = AnkiDroidApp.getSharedPrefs(getBaseContext());
-
         //we need to restore here, as we need it before super.onCreate() is called.
         restoreWelcomeMessage(savedInstanceState);
-        // Open Collection on UI thread while splash screen is showing
-        boolean colOpen = firstCollectionOpen();
 
+        // Open Collection on UI thread while splash screen is showing, get Storage permission
+        boolean colOpen = firstCollectionOpen();
+        if (colOpen) {
+            // Have storage permission
+            // else wait for onPermissionResult to launch to give user a chance to allow access
+            setUpStorage();
+        }
         // Then set theme and content view
         super.onCreate(savedInstanceState);
         setContentView(R.layout.homescreen);
@@ -523,31 +603,6 @@ public class DeckPicker extends NavigationDrawerActivity implements
 
         mReviewSummaryTextView = findViewById(R.id.today_stats_text_view);
 
-        Timber.i("colOpen: %b", colOpen);
-        if (colOpen) {
-            // Show any necessary dialogs (e.g. changelog, special messages, etc)
-            showStartupScreensAndDialogs(preferences, 0);
-        } else {
-            // Show error dialogs
-            if (Permissions.hasStorageAccessPermission(this)) {
-                if (!AnkiDroidApp.isSdCardMounted()) {
-                    Timber.i("SD card not mounted");
-                    onSdCardNotMounted();
-                } else if (!CollectionHelper.isCurrentAnkiDroidDirAccessible(this)) {
-                    Timber.i("AnkiDroid directory inaccessible");
-                    Intent i = Preferences.getPreferenceSubscreenIntent(this, "com.ichi2.anki.prefs.advanced");
-                    startActivityForResultWithoutAnimation(i, REQUEST_PATH_UPDATE);
-                    Toast.makeText(this, R.string.directory_inaccessible, Toast.LENGTH_LONG).show();
-                } else if (isFutureAnkiDroidVersion()) {
-                    Timber.i("Displaying database versioning");
-                    showDatabaseErrorDialog(DatabaseErrorDialog.INCOMPATIBLE_DB_VERSION);
-                } else {
-                    Timber.i("Displaying database error");
-                    showDatabaseErrorDialog(DatabaseErrorDialog.DIALOG_LOAD_FAILED);
-                }
-            }
-        }
-
         mShortAnimDuration = getResources().getInteger(android.R.integer.config_shortAnimTime);
     }
 
@@ -599,7 +654,7 @@ public class DeckPicker extends NavigationDrawerActivity implements
                     .show();
             return false;
         }
-        if (Permissions.hasStorageAccessPermission(this)) {
+        if (Permissions.hasStorageAccessPermission(this) && getApplicationInfo().targetSdkVersion <= Build.VERSION_CODES.Q) {
             Timber.i("User has permissions to access collection");
             // Show error dialog if collection could not be opened
             return CollectionHelper.getInstance().getColSafe(this) != null;
@@ -879,6 +934,11 @@ public class DeckPicker extends NavigationDrawerActivity implements
             } else {
                 UIUtils.showSimpleSnackbar(this, getString(R.string.export_save_apkg_unsuccessful), false);
             }
+        } else if (requestCode == StorageMigrator.OPEN_REQUEST_CODE) {
+            if (resultCode == RESULT_OK && intent != null) {
+                //TODO: execute this using AsyncTask and launch DeckPicker from listener
+                onSAFRequestPermissionResult(intent);
+            }
         }
     }
 
@@ -919,9 +979,8 @@ public class DeckPicker extends NavigationDrawerActivity implements
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_STORAGE_PERMISSION && permissions.length == 1) {
             if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                invalidateOptionsMenu();
-                showStartupScreensAndDialogs(AnkiDroidApp.getSharedPrefs(this), 0);
-            } else {
+
+            } /*else {
                 // User denied access to file storage  so show error toast and display "App Info"
                 Toast.makeText(this, R.string.startup_no_storage_permission, Toast.LENGTH_LONG).show();
                 finishWithoutAnimation();
@@ -931,8 +990,16 @@ public class DeckPicker extends NavigationDrawerActivity implements
                 Uri uri = Uri.fromParts("package", getPackageName(), null);
                 intent.setData(uri);
                 startActivityWithoutAnimation(intent);
-            }
+            } */
         }
+
+        /*
+         Set up Storage regardless of whether we have the permission or not
+         User will be prompted to provide access to Legacy AnkiDroid directory
+         If access is not provided, AnkiDroid will default to Legacy Storage
+         TODO: show startup screen AFTER storage has been setup
+         */
+        setUpStorage();
     }
 
 

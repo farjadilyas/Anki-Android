@@ -1,6 +1,8 @@
 package com.ichi2.utils;
 
 
+import android.content.Context;
+
 import androidx.annotation.NonNull;
 
 /** TODO: Move this to standard library in API 24 */

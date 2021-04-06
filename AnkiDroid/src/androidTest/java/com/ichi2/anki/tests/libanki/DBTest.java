@@ -29,6 +29,7 @@ public class DBTest {
     public GrantPermissionRule mRuntimePermissionRule =
             GrantPermissionRule.grant(Manifest.permission.WRITE_EXTERNAL_STORAGE);
 
+    /*
     @Test
     public void testDBCorruption() throws Exception {
 
@@ -67,7 +68,7 @@ public class DBTest {
         illFatedDB.close();
         SQLiteDatabase.deleteDatabase(illFatedDBFile);
     }
-
+    */
 
 
     // Test fixture that lets us inspect corruption handler status

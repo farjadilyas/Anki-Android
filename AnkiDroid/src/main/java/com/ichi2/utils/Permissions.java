@@ -4,6 +4,8 @@ import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
 
+import com.ichi2.anki.AnkiDroidApp;
+
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
 

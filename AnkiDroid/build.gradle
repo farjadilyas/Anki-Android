@@ -298,4 +298,7 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-contrib:3.3.0'
     androidTestImplementation 'androidx.test.ext:junit:1.1.2'
     androidTestImplementation 'androidx.test:rules:1.3.0'
+
+    // Scoped Storage DocumentFile
+    implementation 'androidx.documentfile:documentfile:1.0.1'
 }

@@ -7,6 +7,7 @@ import android.os.Message;
 
 import com.ichi2.anki.dialogs.DialogHandler;
 import com.ichi2.anki.services.ReminderService;
+import com.ichi2.libanki.Collection;
 import com.ichi2.utils.FunctionalInterfaces.Consumer;
 import com.ichi2.utils.ImportUtils;
 import com.ichi2.utils.ImportUtils.ImportResult;
@@ -26,15 +27,19 @@ import timber.log.Timber;
  */
 
 public class IntentHandler extends Activity {
+
+    private Intent reloadIntent = null;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         //Note: This is our entry point from the launcher with intent: android.intent.action.MAIN
         Timber.d("onCreate()");
         super.onCreate(savedInstanceState);
         setContentView(R.layout.progress_bar);
+
         Intent intent = getIntent();
         Timber.v(intent.toString());
-        Intent reloadIntent = new Intent(this, DeckPicker.class);
+        reloadIntent = new Intent(this, DeckPicker.class);
         reloadIntent.setDataAndType(getIntent().getData(), getIntent().getType());
         String action = intent.getAction();
         // #6157 - We want to block actions that need permissions we don't have, but not the default case

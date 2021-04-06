@@ -25,4 +25,19 @@ public class PreferenceExtensions {
         target.edit().putString(key, supplied).apply();
         return supplied;
     }
+
+    @CheckResult //Not truly an error as this has a side effect, but you should use a "set" API for perf.
+    public static String getOrSetString(@NonNull SharedPreferences target, @NonNull String key, @NonNull String supplied) {
+        if (target.contains(key)) {
+            //the default Is never returned. The value might be able be optimised, but the Android API should be better.
+            return target.getString(key, "");
+        }
+
+        target.edit().putString(key, supplied).apply();
+        return supplied;
+    }
+
+    public static void setString(@NonNull SharedPreferences target, @NonNull String key, @NonNull String supplied) {
+        target.edit().putString(key, supplied).apply();
+    }
 }

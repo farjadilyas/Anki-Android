@@ -19,6 +19,7 @@
 package com.ichi2.anki;
 
 import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.app.Application;
 import android.content.Context;
 import android.content.Intent;
@@ -41,7 +42,6 @@ import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import android.util.Log;
 import android.view.ViewConfiguration;
 import android.webkit.CookieManager;
-import android.webkit.WebView;
 
 import com.ichi2.anki.analytics.AnkiDroidCrashReportDialog;
 import com.ichi2.anki.contextmenu.AnkiCardContextMenu;
@@ -55,7 +55,6 @@ import com.ichi2.utils.AdaptionUtil;
 import com.ichi2.utils.ExceptionUtil;
 import com.ichi2.utils.LanguageUtil;
 import com.ichi2.anki.analytics.UsageAnalytics;
-import com.ichi2.utils.Permissions;
 import com.ichi2.utils.WebViewDebugging;
 
 import org.acra.ACRA;
@@ -72,9 +71,7 @@ import org.acra.config.ToastConfigurationBuilder;
 import org.acra.sender.HttpSender;
 
 import java.io.InputStream;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -335,19 +332,21 @@ public class AnkiDroidApp extends Application {
 
         // Forget the last deck that was used in the CardBrowser
         CardBrowser.clearLastDeckId();
+    }
 
+    public void completeStorageSetUp(Activity activity) {
         // Create the AnkiDroid directory if missing. Send exception report if inaccessible.
-        if (Permissions.hasStorageAccessPermission(this)) {
-            try {
-                String dir = CollectionHelper.getCurrentAnkiDroidDirectory(this);
-                CollectionHelper.initializeAnkiDroidDirectory(dir);
-            } catch (StorageAccessException e) {
-                Timber.e(e, "Could not initialize AnkiDroid directory");
-                String defaultDir = CollectionHelper.getDefaultAnkiDroidDirectory();
-                if (isSdCardMounted() && CollectionHelper.getCurrentAnkiDroidDirectory(this).equals(defaultDir)) {
-                    // Don't send report if the user is using a custom directory as SD cards trip up here a lot
-                    sendExceptionReport(e, "AnkiDroidApp.onCreate");
-                }
+        try {
+            StorageMigrator.getInstance().testDirectories(activity);
+            String dir = StorageMigrator.getInstance().getCurrentAnkiDroidDirectory(activity);
+            Timber.i("AnkiDroidApp Initializing AnkiDroid directory %s", dir);
+            CollectionHelper.initializeAnkiDroidDirectory(dir);
+        } catch (StorageAccessException e) {
+            Timber.e(e, "Could not initialize AnkiDroid directory");
+            String defaultDir = CollectionHelper.getDefaultAnkiDroidDirectory();
+            if (isSdCardMounted() && CollectionHelper.getCurrentAnkiDroidDirectory(activity).equals(defaultDir)) {
+                // Don't send report if the user is using a custom directory as SD cards trip up here a lot
+                sendExceptionReport(e, "AnkiDroidApp.onCreate");
             }
         }
 
