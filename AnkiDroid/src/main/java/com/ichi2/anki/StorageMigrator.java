@@ -26,7 +26,6 @@ public class StorageMigrator {
         Timber.i("DIR SCOPED EXTERNAL: %s", CollectionHelper.getSystemDefaultExternalAnkiDroidDirectory(context));
     }
 
-
     /**
      * Checks if current directory stored in SharedPreferences is a Legacy Storage Directory.
      * @param context Context used to access SharedPreferences.
@@ -47,54 +46,17 @@ public class StorageMigrator {
         return currentDir.equals(legacyDir);
     }
 
-
-    /**
-     * Requests storage permission for a directory by launching the device's System File Picker.
-     * @param context Activity context to launch Intent.
-     */
-    public static void requestLegacyStoragePermission(Activity context) {
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-        intent.putExtra("android.content.extra.SHOW_ADVANCED", true);
-        context.startActivityForResult(intent, OPEN_REQUEST_CODE);
-    }
-
-
-    /**
-     * Persists Uri with permission grant provided by user via System Picker so that it is persisted beyond device reboots.
-     * @param context Context required for Content Resolver
-     * @param intent Intent returned onActivityResult() after a user has responded to a permission request sent via System File Picker.
-     * @return returns true if the intent had a valid uri with a permission grant that has now been persisted.
-     */
-    public static boolean persistUriPermission(Context context, Intent intent) {
-        Uri uri = intent.getData();
-        if (uri == null) {
-            return false;
-        }
-
-        // Persist URI Permission grant
-        final int takeFlags = intent.getFlags()
-                & (Intent.FLAG_GRANT_READ_URI_PERMISSION
-                | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-
-        Timber.i("persistUriPermission() called %d", takeFlags);
-        context.getContentResolver().takePersistableUriPermission(uri, takeFlags);
-        return true;
-    }
-
-
     /**
      * Migrates user data from Legacy Storage Directory to Scoped Storage Directory
      * @param activity Activity context
-     * @param uri Directory root's Uri which contains permission granted via System File Picker
-     * @param usingScopedStorage Whether the device has to use Scoped Storage via the Storage Access Fragment to access the Legacy Directory. Uses a different migration mechanism based on this parameter.
      * @return Returns true if migration was successful
      */
-    public static boolean migrateToScoped(Activity activity, @Nullable Uri uri, boolean usingScopedStorage) {
+    public static boolean migrateToScoped(Activity activity) {
         String sourceDirectory = CollectionHelper.getLegacyAnkiDroidDirectory();
         String destinationDirectory = CollectionHelper.getSystemDefaultExternalAnkiDroidDirectory(activity);
 
         Timber.i("STARTING MIGRATION %s to %s", sourceDirectory, destinationDirectory);
-        boolean migrationComplete = FileUtil.copyDirectory(activity, uri, usingScopedStorage, sourceDirectory, destinationDirectory);
+        boolean migrationComplete = FileUtil.copyDirectory(sourceDirectory, destinationDirectory);
         Timber.i("COMPLETED MIGRATION %b", migrationComplete);
 
         if (migrationComplete) {
