@@ -54,7 +54,7 @@ android {
         versionName="2.15alpha34"
         minSdkVersion 21
         //noinspection OldTargetApi - also performed in api/build.fradle
-        targetSdkVersion 29 // change .travis.yml platform download at same time
+        targetSdkVersion 30 // change .travis.yml platform download at same time
         testApplicationId "com.ichi2.anki.tests"
         vectorDrawables.useSupportLibrary = true
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
