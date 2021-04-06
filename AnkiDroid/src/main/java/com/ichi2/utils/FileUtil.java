@@ -94,6 +94,13 @@ public class FileUtil {
         return new AbstractMap.SimpleEntry<>(fileName.substring(0, index), fileName.substring(index));
     }
 
+
+    /**
+     * Uses Java I/O to move transfer data
+     * @param in stream of bytes representing input
+     * @param out stream of bytes representing output
+     * @return Returns true if data transfered
+     */
     public static boolean moveFile(InputStream in, OutputStream out) {
         try {
             byte[] buffer = new byte[1024];
@@ -123,37 +130,12 @@ public class FileUtil {
         return true;
     }
 
-    private static boolean copyFolderUnderScopedStorage(Activity activity, Uri treeUri, File destination, int iter) {
-
-        DocumentFile documentsTree = DocumentFile.fromTreeUri(activity.getApplication(), treeUri);
-        DocumentFile[] files = null;
-
-        if (documentsTree != null && documentsTree.isDirectory()) {
-            if (!destination.exists()) {
-                destination.mkdirs();
-            }
-
-            files = documentsTree.listFiles();
-
-            for (DocumentFile file : files) {
-                if (file.getName() != null) {
-                    File destFile = new File(destination, file.getName());
-                    Timber.i("src: %s, dest file: %s", file.getUri().getPath(), destFile);
-                    copyFolderUnderScopedStorage(activity, file.getUri(), destFile, iter + 1);
-                }
-            }
-        } else {
-            try {
-                InputStream in = activity.getContentResolver().openInputStream(treeUri);
-                OutputStream out = new FileOutputStream(destination);
-                return moveFile(in, out);
-            } catch (FileNotFoundException e) {
-                e.printStackTrace();
-            }
-        }
-        return true;
-    }
-
+    /**
+     * Copies folder given that the App has access to the Legacy Storage Directory via WRITE_EXTERNAL_STORAGE
+     * @param source File representation of source directory
+     * @param destination File representation of destination directory
+     * @return Returns true if folder copied
+     */
     private static boolean copyFolderUnderLegacyStorage(File source, File destination)
     {
         if (source.isDirectory()) {
@@ -196,23 +178,14 @@ public class FileUtil {
      * @param outputPath Destination path - will be created if it doesn't exist
      * @return Returns true if successful
      */
-    public static boolean copyDirectory(Activity activity, Uri sourceUri, boolean usingScopedStorage, String inputPath, String outputPath) {
+    public static boolean moveDirectory(tring inputPath, String outputPath) {
 
         File sourceDirectory = new File(inputPath);
         File destinationDirectory = new File(outputPath);
 
-        boolean folderCopied = true;
-        if (usingScopedStorage) {
-            folderCopied = copyFolderUnderScopedStorage(activity, sourceUri, destinationDirectory, 0);
-            try {
-                DocumentsContract.deleteDocument(activity.getContentResolver(), sourceUri);
-            } catch (FileNotFoundException e) {
-                e.printStackTrace();
-            }
-        } else {
-            folderCopied = copyFolderUnderLegacyStorage(sourceDirectory, destinationDirectory);
-            sourceDirectory.delete();
-        }
+        boolean folderCopied = copyFolderUnderLegacyStorage(sourceDirectory, destinationDirectory);
+        sourceDirectory.delete();
+
         return folderCopied;
     }
 
@@ -224,17 +197,10 @@ public class FileUtil {
      * @param outputPath Destination path - will be created if it doesn't exist
      * @return Returns true if successful
      */
-    public static boolean moveDirectory(Activity activity, Uri sourceUri, boolean usingScopedStorage, String inputPath, String outputPath) {
+    public static boolean copyDirectory(String inputPath, String outputPath) {
 
         File sourceDirectory = new File(inputPath);
         File destinationDirectory = new File(outputPath);
-
-        boolean folderCopied = true;
-        if (usingScopedStorage) {
-            folderCopied = copyFolderUnderScopedStorage(activity, sourceUri, destinationDirectory, 0);
-        } else {
-            folderCopied = copyFolderUnderLegacyStorage(sourceDirectory, destinationDirectory);
-        }
-        return folderCopied;
+        return copyFolderUnderLegacyStorage(sourceDirectory, destinationDirectory);
     }
 }

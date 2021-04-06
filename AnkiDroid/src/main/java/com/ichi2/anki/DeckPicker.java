@@ -28,12 +28,14 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.Editor;
+import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.content.res.TypedArray;
 import android.database.SQLException;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Message;
 import android.os.ParcelFileDescriptor;
@@ -249,26 +251,6 @@ public class DeckPicker extends NavigationDrawerActivity implements
     // --------------------------------------------------------------
 
     /**
-     * If permission obtained, it persists it and migrates to Scoped Storage.
-     * If permission isn't obtained, it defaults to Legacy Storage.
-     * @param intent Returned by Storage Access Framework's ACTION_OPEN_DOCUMENT_TREE Intent, used to determine if permission obtained.
-     */
-    private void onSAFRequestPermissionResult(Intent intent) {
-        Uri uri = intent.getData();
-        StorageMigrator.persistUriPermission(this, intent);
-
-        boolean externalStoragePermissionPersisted = StorageMigrator.persistUriPermission(this, intent);
-        Timber.i("External Storage Permission Obtained (SAF): %s", externalStoragePermissionPersisted);
-        if (externalStoragePermissionPersisted) {
-            // Migrate and finish storage set up
-            migrateToScopedStorageAndRefresh(true, uri);
-        } else {
-            // Default to Legacy Storage and finish storage set up
-            onStoragePermissionNotGranted();
-        }
-    }
-
-    /**
      * If user data is in Scoped Storage Directory already, set it up immediately.
      * If using Legacy Storage and Storage permission has been acquired, migrate to Scoped Storage.
      * If using Legacy Storage but Storage permission has not been acquired, request permission via Storage Access
@@ -276,8 +258,11 @@ public class DeckPicker extends NavigationDrawerActivity implements
      */
     private void setUpStorage() {
         if (StorageMigrator.isLegacyStorage(this)) {
-            Timber.i("DeckPicker REQUESTING PERMISSION THROUGH SAF");
-            StorageMigrator.requestLegacyStoragePermission(this);
+            if (Permissions.hasStorageAccessPermission(this) && getApplicationInfo().targetSdkVersion <= Build.VERSION_CODES.Q) {
+                migrateToScopedStorageAndRefresh();
+            } else {
+                onStoragePermissionNotGranted();
+            }
         } else {
             ((AnkiDroidApp) getApplication()).completeStorageSetUp(this);
         }
@@ -285,12 +270,11 @@ public class DeckPicker extends NavigationDrawerActivity implements
 
     /**
      * Migrates user data from Legacy to Scoped Storage directory and sets up user's collection
-     * @param usingScopedStorage true if Scoped Storage only is enforced in the app
      * @param sourceUri Uri of the root of the Legacy Directory the user provided permission for explicitly
      */
-    private void migrateToScopedStorageAndRefresh(boolean usingScopedStorage, Uri sourceUri) {
+    private void migrateToScopedStorageAndRefresh() {
         showProgressBar();
-        StorageMigrator.migrateToScoped(this, sourceUri, usingScopedStorage);
+        StorageMigrator.migrateToScoped(this);
         completeStorageSetUp();
     }
 
@@ -1009,10 +993,6 @@ public class DeckPicker extends NavigationDrawerActivity implements
             } else {
                 UIUtils.showSimpleSnackbar(this, getString(R.string.export_save_apkg_unsuccessful), false);
             }
-        } else if (requestCode == StorageMigrator.OPEN_REQUEST_CODE) {
-            if (resultCode == RESULT_OK && intent != null) {
-                onSAFRequestPermissionResult(intent);
-            }
         }
     }
 
@@ -1058,6 +1038,17 @@ public class DeckPicker extends NavigationDrawerActivity implements
         Uri uri = Uri.fromParts("package", getPackageName(), null);
         intent.setData(uri);
         startActivityWithoutAnimation(intent);
+    }
+
+    public void onRequestPermissionsResult (int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_STORAGE_PERMISSION && permissions.length == 1) {
+            if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                setUpStorage();
+            } else {
+                onStoragePermissionNotGranted();
+            }
+        }
     }
 
     @Override

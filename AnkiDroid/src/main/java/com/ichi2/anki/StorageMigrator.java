@@ -89,12 +89,12 @@ public class StorageMigrator {
      * @param usingScopedStorage Whether the device has to use Scoped Storage via the Storage Access Fragment to access the Legacy Directory. Uses a different migration mechanism based on this parameter.
      * @return Returns true if migration was successful
      */
-    public static boolean migrateToScoped(Activity activity, @Nullable Uri uri, boolean usingScopedStorage) {
+    public static boolean migrateToScoped(Activity activity) {
         String sourceDirectory = CollectionHelper.getLegacyAnkiDroidDirectory();
         String destinationDirectory = CollectionHelper.getSystemDefaultExternalAnkiDroidDirectory(activity);
 
         Timber.i("STARTING MIGRATION %s to %s", sourceDirectory, destinationDirectory);
-        boolean migrationComplete = FileUtil.copyDirectory(activity, uri, usingScopedStorage, sourceDirectory, destinationDirectory);
+        boolean migrationComplete = FileUtil.copyDirectory(sourceDirectory, destinationDirectory);
         Timber.i("COMPLETED MIGRATION %b", migrationComplete);
 
         if (migrationComplete) {
