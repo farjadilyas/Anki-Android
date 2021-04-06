@@ -25,4 +25,14 @@ public class PreferenceExtensions {
         target.edit().putString(key, supplied).apply();
         return supplied;
     }
+
+
+    /**
+     * Adds/Updates supplied as the corresponding value for key
+     * @param key Key value for SharedPreferences
+     * @param supplied New Value corresponding to the key
+     */
+    public static void setString(@NonNull SharedPreferences target, @NonNull String key, @NonNull String supplied) {
+        target.edit().putString(key, supplied).apply();
+    }
 }

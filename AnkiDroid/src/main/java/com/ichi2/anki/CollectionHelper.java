@@ -50,6 +50,7 @@ public class CollectionHelper {
     private Collection mCollection;
     // Name of anki2 file
     public static final String COLLECTION_FILENAME = "collection.anki2";
+    private static final String ROOT_DIR = "AnkiDroid";
 
     /**
      * Prevents {@link com.ichi2.async.CollectionLoader} from spuriously re-opening the {@link Collection}.
@@ -169,6 +170,17 @@ public class CollectionHelper {
         }
     }
 
+
+    /**
+     * Refresh the {@link Collection}
+     * @param context Context used to get the {@link Collection}
+     */
+    public synchronized void refreshCollection(Context context)
+    {
+        closeCollection(false, "refresh");
+        getCol(context);
+    }
+
     /**
      * @return Whether or not {@link Collection} and its child database are open.
      */
@@ -236,7 +248,7 @@ public class CollectionHelper {
      */
     @SuppressWarnings("deprecation") // TODO Tracked in https://github.com/ankidroid/Anki-Android/issues/5304
     public static String getDefaultAnkiDroidDirectory() {
-        return new File(Environment.getExternalStorageDirectory(), "AnkiDroid").getAbsolutePath();
+        return getLegacyAnkiDroidDirectory();
     }
 
     /**
@@ -257,6 +269,19 @@ public class CollectionHelper {
                 preferences,
                 "deckPath",
                 CollectionHelper::getDefaultAnkiDroidDirectory);
+    }
+
+    @SuppressWarnings("deprecation")
+    public static String getLegacyAnkiDroidDirectory() {
+        return new File(Environment.getExternalStorageDirectory(), ROOT_DIR).getAbsolutePath();
+    }
+
+    public static String getSystemDefaultExternalAnkiDroidDirectory(Context context) {
+        return new File(context.getExternalFilesDir(null), ROOT_DIR).getAbsolutePath();
+    }
+
+    public static String getSystemDefaultInternalAnkiDroidDirectory(Context context) {
+        return new File(context.getFilesDir(), ROOT_DIR).getAbsolutePath();
     }
 
     /**
