@@ -21,6 +21,7 @@
 
 package com.ichi2.anki;
 
+import android.Manifest;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -28,12 +29,14 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.Editor;
+import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.content.res.TypedArray;
 import android.database.SQLException;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Message;
 import android.os.ParcelFileDescriptor;
@@ -249,26 +252,6 @@ public class DeckPicker extends NavigationDrawerActivity implements
     // --------------------------------------------------------------
 
     /**
-     * If permission obtained, it persists it and migrates to Scoped Storage.
-     * If permission isn't obtained, it defaults to Legacy Storage.
-     * @param intent Returned by Storage Access Framework's ACTION_OPEN_DOCUMENT_TREE Intent, used to determine if permission obtained.
-     */
-    private void onSAFRequestPermissionResult(Intent intent) {
-        Uri uri = intent.getData();
-        StorageMigrator.persistUriPermission(this, intent);
-
-        boolean externalStoragePermissionPersisted = StorageMigrator.persistUriPermission(this, intent);
-        Timber.i("External Storage Permission Obtained (SAF): %s", externalStoragePermissionPersisted);
-        if (externalStoragePermissionPersisted) {
-            // Migrate and finish storage set up
-            migrateToScopedStorageAndRefresh(true, uri);
-        } else {
-            // Default to Legacy Storage and finish storage set up
-            onStoragePermissionNotGranted();
-        }
-    }
-
-    /**
      * If user data is in Scoped Storage Directory already, set it up immediately.
      * If using Legacy Storage and Storage permission has been acquired, migrate to Scoped Storage.
      * If using Legacy Storage but Storage permission has not been acquired, request permission via Storage Access
@@ -276,8 +259,11 @@ public class DeckPicker extends NavigationDrawerActivity implements
      */
     private void setUpStorage() {
         if (StorageMigrator.isLegacyStorage(this)) {
-            Timber.i("DeckPicker REQUESTING PERMISSION THROUGH SAF");
-            StorageMigrator.requestLegacyStoragePermission(this);
+            if (Permissions.hasStorageAccessPermission(this) && getApplicationInfo().targetSdkVersion <= Build.VERSION_CODES.Q) {
+                migrateToScopedStorageAndRefresh();
+            } else {
+                onStoragePermissionNotGranted();
+            }
         } else {
             ((AnkiDroidApp) getApplication()).completeStorageSetUp(this);
         }
@@ -285,12 +271,10 @@ public class DeckPicker extends NavigationDrawerActivity implements
 
     /**
      * Migrates user data from Legacy to Scoped Storage directory and sets up user's collection
-     * @param usingScopedStorage true if Scoped Storage only is enforced in the app
-     * @param sourceUri Uri of the root of the Legacy Directory the user provided permission for explicitly
      */
-    private void migrateToScopedStorageAndRefresh(boolean usingScopedStorage, Uri sourceUri) {
+    private void migrateToScopedStorageAndRefresh() {
         showProgressBar();
-        StorageMigrator.migrateToScoped(this, sourceUri, usingScopedStorage);
+        StorageMigrator.migrateToScoped(this);
         completeStorageSetUp();
     }
 
@@ -536,7 +520,8 @@ public class DeckPicker extends NavigationDrawerActivity implements
         //we need to restore here, as we need it before super.onCreate() is called.
         restoreWelcomeMessage(savedInstanceState);
         // Open Collection on UI thread while splash screen is showing
-        setUpStorage();
+
+        // Attempt to setUpStorage - when permission already granted
         boolean colOpen = firstCollectionOpen();
 
         // Then set theme and content view
@@ -611,31 +596,6 @@ public class DeckPicker extends NavigationDrawerActivity implements
 
         mReviewSummaryTextView = findViewById(R.id.today_stats_text_view);
 
-        Timber.i("colOpen: %b", colOpen);
-        if (colOpen) {
-            // Show any necessary dialogs (e.g. changelog, special messages, etc)
-            showStartupScreensAndDialogs(preferences, 0);
-        } else {
-            // Show error dialogs
-            if (Permissions.hasStorageAccessPermission(this)) {
-                if (!AnkiDroidApp.isSdCardMounted()) {
-                    Timber.i("SD card not mounted");
-                    onSdCardNotMounted();
-                } else if (!CollectionHelper.isCurrentAnkiDroidDirAccessible(this)) {
-                    Timber.i("AnkiDroid directory inaccessible");
-                    Intent i = Preferences.getPreferenceSubscreenIntent(this, "com.ichi2.anki.prefs.advanced");
-                    startActivityForResultWithoutAnimation(i, REQUEST_PATH_UPDATE);
-                    Toast.makeText(this, R.string.directory_inaccessible, Toast.LENGTH_LONG).show();
-                } else if (isFutureAnkiDroidVersion()) {
-                    Timber.i("Displaying database versioning");
-                    showDatabaseErrorDialog(DatabaseErrorDialog.INCOMPATIBLE_DB_VERSION);
-                } else {
-                    Timber.i("Displaying database error");
-                    showDatabaseErrorDialog(DatabaseErrorDialog.DIALOG_LOAD_FAILED);
-                }
-            }
-        }
-
         mShortAnimDuration = getResources().getInteger(android.R.integer.config_shortAnimTime);
     }
 
@@ -689,12 +649,14 @@ public class DeckPicker extends NavigationDrawerActivity implements
         }
         if (Permissions.hasStorageAccessPermission(this)) {
             Timber.i("User has permissions to access collection");
+            setUpStorage();
             // Show error dialog if collection could not be opened
             return CollectionHelper.getInstance().getColSafe(this) != null;
         } else if (mClosedWelcomeMessage) {
             // DEFECT #5847: This fails if the activity is killed.
             //Even if the dialog is showing, we want to show it again.
-            StorageMigrator.requestLegacyStoragePermission(this);
+            ActivityCompat.requestPermissions(this, new String[] {Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                    REQUEST_STORAGE_PERMISSION);
             return false;
         } else {
             Timber.i("Displaying initial permission request dialog");
@@ -706,7 +668,8 @@ public class DeckPicker extends NavigationDrawerActivity implements
                     .positiveText(R.string.dialog_ok)
                     .onPositive((innerDialog, innerWhich) -> {
                         this.mClosedWelcomeMessage = true;
-                        StorageMigrator.requestLegacyStoragePermission(this);
+                        ActivityCompat.requestPermissions(this, new String[] {Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                                REQUEST_STORAGE_PERMISSION);
                     })
                     .cancelable(false)
                     .canceledOnTouchOutside(false)
@@ -1009,10 +972,6 @@ public class DeckPicker extends NavigationDrawerActivity implements
             } else {
                 UIUtils.showSimpleSnackbar(this, getString(R.string.export_save_apkg_unsuccessful), false);
             }
-        } else if (requestCode == StorageMigrator.OPEN_REQUEST_CODE) {
-            if (resultCode == RESULT_OK && intent != null) {
-                onSAFRequestPermissionResult(intent);
-            }
         }
     }
 
@@ -1058,6 +1017,17 @@ public class DeckPicker extends NavigationDrawerActivity implements
         Uri uri = Uri.fromParts("package", getPackageName(), null);
         intent.setData(uri);
         startActivityWithoutAnimation(intent);
+    }
+
+    public void onRequestPermissionsResult (int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_STORAGE_PERMISSION && permissions.length == 1) {
+            if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                setUpStorage();
+            } else {
+                onStoragePermissionNotGranted();
+            }
+        }
     }
 
     @Override
