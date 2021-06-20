@@ -237,14 +237,89 @@ public class CollectionHelper {
 
     /**
      * Get the absolute path to a directory that is suitable to be the default starting location
-     * for the AnkiDroid folder. This is a folder named "AnkiDroid" at the top level of the
-     * external storage directory.
-     * @return the folder path
+     * for the AnkiDroid folder.
+     * <p>
+     * Currently, this is a folder named "AnkiDroid" at the top level of the external storage directory.
+     * <p>
+     * When targeting API > 29, AnkiDroid won't be able to access the directory used previously.
+     * An App-Specific Directory must be used to store the AnkiDroid directory.
+     * <p>
+     * Use App-Specific Internal Storage if: primary external storage is emulated and hence,
+     * offers no advantage over internal storage.
+     * <p>
+     * Use App-Specific External Storage if: primary external storage isn't emulated and hence, offers more storage
+     * space at the expense of allowing apps which have a WRITE_EXTERNAL_STORAGE permission access to App-Specific files
+     *
+     * @return Absolute Path to the default location starting location for the AnkiDroid folder
      */
     @SuppressWarnings("deprecation") // TODO Tracked in https://github.com/ankidroid/Anki-Android/issues/5304
     @CheckResult
     public static String getDefaultAnkiDroidDirectory(@NonNull Context context) {
-        return new File(Environment.getExternalStorageDirectory(), "AnkiDroid").getAbsolutePath();
+        if (!AnkiDroidApp.TESTING_SCOPED_STORAGE) {
+            return getLegacyAnkiDroidDirectory();
+        }
+        if (Environment.isExternalStorageEmulated()) {
+            return getAppSpecificInternalAnkiDroidDirectory(context);
+        }
+        return getAppSpecificExternalAnkiDroidDirectory(context);
+    }
+
+
+    /**
+     * @param parentDirectory The {@link File} that represents the pathname of
+     *                        the parent directory of the AnkiDroid folder
+     * @return The absolute path of the AnkiDroid directory under the given parentDirectory {@link File}
+     */
+    private static String getAnkiDroidDirectoryFromParentDirectory(File parentDirectory) {
+        return new File(parentDirectory, "AnkiDroid").getAbsolutePath();
+    }
+
+
+    /**
+     * Returns the absolute path to the AnkiDroid directory under the primary/shared external storage directory.
+     * This directory may be in emulated external storage, or can be an SD Card directory.
+     * <p>
+     * This holds a larger amount of data than an internal storage directory
+     * The path returned will no longer be accessible to AnkiDroid once targetSdk > 29
+     *
+     * @return Absolute path to the AnkiDroid directory in primary shared/external storage
+     */
+    @SuppressWarnings("deprecation")
+    public static String getLegacyAnkiDroidDirectory() {
+        return getAnkiDroidDirectoryFromParentDirectory(Environment.getExternalStorageDirectory());
+    }
+
+
+    /**
+     * Returns the absolute path to the AnkiDroid directory under the app-specific, primary/shared external storage
+     * directory.
+     * <p>
+     * This directory may be in emulated external storage, or can be an SD Card directory.
+     * If it isn't emulated, using this directory over internal storage can be beneficial since it may be able to
+     * store more data.
+     * <p>
+     * AnkiDroid can access this directory without permissions, even under Scoped Storage
+     * Other apps can access this directory if they have the correct permissions
+     *
+     * @param context Used to get the External App-Specific directory for AnkiDroid
+     * @return Returns the absolute path to the App-Specific External AnkiDroid directory
+     */
+    public static String getAppSpecificExternalAnkiDroidDirectory(@NonNull Context context) {
+        return getAnkiDroidDirectoryFromParentDirectory(context.getExternalFilesDir(null));
+    }
+
+
+    /**
+     * Returns the absolute path to the private AnkiDroid directory under the app-specific, internal storage directory.
+     * <p>
+     * AnkiDroid can access this directory without permissions, even under Scoped Storage
+     * Other apps cannot access this directory, regardless of what permissions they have
+     *
+     * @param context Used to get the Internal App-Specific directory for AnkiDroid
+     * @return Returns the absolute path to the App-Specific Internal AnkiDroid Directory
+     */
+        public static String getAppSpecificInternalAnkiDroidDirectory(@NonNull Context context) {
+        return getAnkiDroidDirectoryFromParentDirectory(context.getFilesDir());
     }
 
     /**
