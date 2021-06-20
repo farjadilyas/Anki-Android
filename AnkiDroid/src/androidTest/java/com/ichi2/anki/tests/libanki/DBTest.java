@@ -1,6 +1,7 @@
 package com.ichi2.anki.tests.libanki;
 
 import android.Manifest;
+import android.app.Application;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteDatabaseCorruptException;
 import android.os.Build;
@@ -19,6 +20,7 @@ import java.io.FileOutputStream;
 import java.util.Random;
 
 import androidx.sqlite.db.SupportSQLiteDatabase;
+import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.rule.GrantPermissionRule;
 
@@ -32,7 +34,8 @@ public class DBTest {
     @Test
     public void testDBCorruption() throws Exception {
 
-        String storagePath = CollectionHelper.getDefaultAnkiDroidDirectory();
+        Application application = ApplicationProvider.getApplicationContext();
+        String storagePath = CollectionHelper.getDefaultAnkiDroidDirectory(application);
         File illFatedDBFile = new File(storagePath, "illFatedDB.anki2");
 
         // Make sure we have clean state to start with
