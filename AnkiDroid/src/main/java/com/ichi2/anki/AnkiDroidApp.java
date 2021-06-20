@@ -151,6 +151,8 @@ import static timber.log.Timber.DebugTree;
 )
 public class AnkiDroidApp extends Application {
 
+    public static final boolean TESTING_SCOPED_STORAGE = false;
+
     private static final String WEBVIEW_VER_NAME = "WEBVIEW_VER_NAME";
 
     public static final String XML_CUSTOM_NAMESPACE = "http://arbitrary.app.namespace/com.ichi2.anki";
