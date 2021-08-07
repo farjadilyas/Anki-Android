@@ -38,8 +38,10 @@ import net.ankiweb.rsdroid.BackendException;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 
 import androidx.annotation.VisibleForTesting;
+import androidx.core.util.Pair;
 import timber.log.Timber;
 
 import static com.ichi2.libanki.Consts.SCHEMA_VERSION;
@@ -312,6 +314,52 @@ public class CollectionHelper {
     @SuppressWarnings("deprecation")
     public static String getLegacyAnkiDroidDirectory() {
         return new File(Environment.getExternalStorageDirectory(), "AnkiDroid").getAbsolutePath();
+    }
+
+    public static String[] getAccessibleStorageDirectories(Context context) {
+        File currentDir = new File(getCurrentAnkiDroidDirectory(context));
+        File[] externalDirs = context.getExternalFilesDirs(null);
+        String[] dirs = new String[externalDirs.length + 1];
+        String[] dirLabels = new String[externalDirs.length + 1];
+
+        dirs[0] = getAppSpecificInternalAnkiDroidDirectory(context);
+        for (int i = 0; i < externalDirs.length; ++i) {
+            dirs[i + 1] = externalDirs[i].getAbsolutePath();
+            if (externalDirs[i].equals(currentDir)) {
+                String tempPath = dirs[0];
+                dirs[0] = dirs[i + 1];
+                dirs[i + 1] = tempPath;
+            }
+        }
+        return dirs;
+    }
+
+    public static Pair<ArrayList<String>, ArrayList<String>> getAccessStorageDirectories(Context context) {
+        File currentDir = new File(getCurrentAnkiDroidDirectory(context));
+        File internalDir = new File(getAppSpecificInternalAnkiDroidDirectory(context));
+        File[] externalDirs = context.getExternalFilesDirs(null);
+        ArrayList<String> dirs = new ArrayList<>();
+        ArrayList<String> dirLabels = new ArrayList<>();
+
+        // Add current directory
+        dirs.add(currentDir.getAbsolutePath());
+        dirLabels.add("Current: " + currentDir.getAbsolutePath());
+
+        // Add internal app-specific directory
+        if (!currentDir.equals(internalDir)) {
+            dirs.add(internalDir.getAbsolutePath());
+            dirLabels.add("Internal: " + internalDir.getAbsolutePath());
+        }
+
+        // Add external app-specific directories
+        for (File externalDir : externalDirs) {
+            if (!currentDir.equals(externalDir)) {
+                dirs.add(externalDir.getAbsolutePath());
+                dirLabels.add("External: " + externalDir.getAbsolutePath());
+            }
+        }
+
+        return new Pair<>(dirs, dirLabels);
     }
 
 

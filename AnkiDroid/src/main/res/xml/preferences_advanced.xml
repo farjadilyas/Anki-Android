@@ -26,10 +26,9 @@
     android:title="@string/pref_cat_advanced"
     android:summary="@string/pref_cat_advanced_summ"
     android:key="pref_screen_advanced">
-        <EditTextPreference
-            android:defaultValue="/sdcard/AnkiDroid"
+        <ListPreference
+            android:defaultValue=""
             android:key="deckPath"
-            android:summary="@string/preference_summary_literal"
             android:title="@string/col_path" />
         <com.ichi2.ui.ConfirmationPreference
             android:key="force_full_sync"

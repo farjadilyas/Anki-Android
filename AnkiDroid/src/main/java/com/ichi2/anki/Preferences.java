@@ -72,7 +72,9 @@ import com.ichi2.utils.JSONObject;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.lang.reflect.Array;
 import java.nio.channels.FileChannel;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.HashMap;
@@ -90,6 +92,7 @@ import androidx.annotation.VisibleForTesting;
 import androidx.annotation.XmlRes;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.util.Pair;
 import timber.log.Timber;
 
 import static com.ichi2.anim.ActivityTransitionAnimation.Direction.FADE;
@@ -1079,12 +1082,20 @@ public class Preferences extends AppCompatPreferenceActivity implements Preferen
             return getSubscreenIntent(context, "com.ichi2.anki.prefs.advanced", AdvancedSettingsFragment.class.getSimpleName());
         }
 
+        private String[] getAccessibleStorageDirectories() {
+            return null;
+        }
+
         @Override
         protected void initSubscreen() {
             addPreferencesFromResource(R.xml.preferences_advanced);
             android.preference.PreferenceScreen screen = getPreferenceScreen();
             // Check that input is valid before committing change in the collection path
-            android.preference.EditTextPreference collectionPathPreference = (android.preference.EditTextPreference) screen.findPreference("deckPath");
+            android.preference.ListPreference collectionPathPreference = (android.preference.ListPreference) screen.findPreference("deckPath");
+            //String[] accessibleDirs = CollectionHelper.getAccessibleStorageDirectories(getActivity());
+            Pair<ArrayList<String>, ArrayList<String>> accessibleDirs = CollectionHelper.getAccessStorageDirectories(getActivity());
+            collectionPathPreference.setEntries(accessibleDirs.second.toArray(new CharSequence[accessibleDirs.second.size()]));
+            collectionPathPreference.setEntryValues(accessibleDirs.first.toArray(new CharSequence[accessibleDirs.first.size()]));
             collectionPathPreference.setOnPreferenceChangeListener((preference, newValue) -> {
                 final String newPath = (String) newValue;
                 try {
@@ -1097,7 +1108,7 @@ public class Preferences extends AppCompatPreferenceActivity implements Preferen
                             .positiveText(R.string.dialog_ok)
                             .negativeText(R.string.reset_custom_buttons)
                             .onPositive((dialog, which) -> dialog.dismiss())
-                            .onNegative((dialog, which) -> collectionPathPreference.setText(CollectionHelper.getDefaultAnkiDroidDirectory(requireContext())))
+                            .onNegative((dialog, which) -> collectionPathPreference.setValue(CollectionHelper.getDefaultAnkiDroidDirectory(requireContext())))
                             .show();
                     return false;
                 }

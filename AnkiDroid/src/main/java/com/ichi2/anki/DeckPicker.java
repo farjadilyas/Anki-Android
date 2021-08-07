@@ -544,7 +544,7 @@ public class DeckPicker extends NavigationDrawerActivity implements
      * Attempts startup if storage permission has been acquired, else, it requests the permission
      * */
     public void handleStartup() {
-        if (Permissions.hasStorageAccessPermission(this)) {
+        if (true || Permissions.hasStorageAccessPermission(this)) {
             StartupFailure failure = InitialActivity.getStartupFailureType(this);
             if (failure == null) {
                 // Show any necessary dialogs (e.g. changelog, special messages, etc)
