@@ -29,6 +29,7 @@ import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.provider.Settings;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -667,5 +668,16 @@ public class AnkiActivity extends AppCompatActivity implements SimpleMessageDial
         }).start();
 
         return true;
+    }
+
+    /**
+     * Opens the Android settings page for AnkiDroid
+     */
+    public void launchApplicationDetailsSettings() {
+        Intent intent = new Intent();
+        intent.setAction(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+        Uri uri = Uri.fromParts("package", getPackageName(), null);
+        intent.setData(uri);
+        startActivityWithoutAnimation(intent);
     }
 }

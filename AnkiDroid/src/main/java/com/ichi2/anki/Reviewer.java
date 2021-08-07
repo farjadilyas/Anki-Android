@@ -40,39 +40,22 @@ import android.view.MenuItem;
 import android.view.SubMenu;
 import android.view.View;
 import android.view.ViewGroup;
-import android.webkit.WebView;
 import android.webkit.JavascriptInterface;
+import android.webkit.WebView;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import androidx.annotation.CheckResult;
-import androidx.annotation.DrawableRes;
-import androidx.annotation.IdRes;
-import androidx.annotation.MenuRes;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.annotation.PluralsRes;
-import androidx.annotation.VisibleForTesting;
-import androidx.appcompat.view.menu.MenuBuilder;
-import androidx.appcompat.app.ActionBar;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
-import androidx.core.content.res.ResourcesCompat;
-import androidx.core.view.ActionProvider;
-import androidx.core.view.MenuItemCompat;
-import androidx.vectordrawable.graphics.drawable.VectorDrawableCompat;
-
 import com.ichi2.anki.cardviewer.CardAppearance;
 import com.ichi2.anki.cardviewer.Gesture;
 import com.ichi2.anki.dialogs.ConfirmationDialog;
-import com.ichi2.anki.multimediacard.AudioView;
 import com.ichi2.anki.dialogs.RescheduleDialog;
+import com.ichi2.anki.multimediacard.AudioView;
+import com.ichi2.anki.reviewer.ActionButtons;
 import com.ichi2.anki.reviewer.FullScreenMode;
 import com.ichi2.anki.reviewer.PeripheralKeymap;
 import com.ichi2.anki.reviewer.ReviewerUi;
 import com.ichi2.anki.workarounds.FirefoxSnackbarWorkaround;
-import com.ichi2.anki.reviewer.ActionButtons;
 import com.ichi2.async.CollectionTask;
 import com.ichi2.async.TaskManager;
 import com.ichi2.libanki.Card;
@@ -83,8 +66,8 @@ import com.ichi2.libanki.Utils;
 import com.ichi2.libanki.sched.Counts;
 import com.ichi2.themes.Themes;
 import com.ichi2.utils.AndroidUiUtils;
-import com.ichi2.utils.FunctionalInterfaces.Consumer;
 import com.ichi2.utils.Computation;
+import com.ichi2.utils.FunctionalInterfaces.Consumer;
 import com.ichi2.utils.Permissions;
 import com.ichi2.utils.ViewGroupUtils;
 import com.ichi2.widget.WidgetStatus;
@@ -92,18 +75,46 @@ import com.ichi2.widget.WidgetStatus;
 import java.lang.ref.WeakReference;
 import java.util.Collections;
 
+import androidx.annotation.CheckResult;
+import androidx.annotation.DrawableRes;
+import androidx.annotation.IdRes;
+import androidx.annotation.MenuRes;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.annotation.PluralsRes;
+import androidx.annotation.VisibleForTesting;
+import androidx.appcompat.app.ActionBar;
+import androidx.appcompat.view.menu.MenuBuilder;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import androidx.core.content.res.ResourcesCompat;
+import androidx.core.view.ActionProvider;
+import androidx.core.view.MenuItemCompat;
+import androidx.vectordrawable.graphics.drawable.VectorDrawableCompat;
 import timber.log.Timber;
 
-import static com.ichi2.anki.reviewer.CardMarker.*;
-import static com.ichi2.anim.ActivityTransitionAnimation.Direction.*;
+import static com.ichi2.anim.ActivityTransitionAnimation.Direction.END;
+import static com.ichi2.anim.ActivityTransitionAnimation.Direction.FADE;
+import static com.ichi2.anim.ActivityTransitionAnimation.Direction.START;
+import static com.ichi2.anki.reviewer.CardMarker.FLAG_BLUE;
+import static com.ichi2.anki.reviewer.CardMarker.FLAG_GREEN;
+import static com.ichi2.anki.reviewer.CardMarker.FLAG_NONE;
+import static com.ichi2.anki.reviewer.CardMarker.FLAG_ORANGE;
+import static com.ichi2.anki.reviewer.CardMarker.FLAG_PINK;
+import static com.ichi2.anki.reviewer.CardMarker.FLAG_PURPLE;
+import static com.ichi2.anki.reviewer.CardMarker.FLAG_RED;
+import static com.ichi2.anki.reviewer.CardMarker.FLAG_TURQUOISE;
+import static com.ichi2.compat.CompatHelper.getSdkVersion;
 
 
 public class Reviewer extends AbstractFlashcardViewer {
     private boolean mHasDrawerSwipeConflicts = false;
     private boolean mShowWhiteboard = true;
     private boolean mPrefFullscreenReview = false;
+    private Runnable pendingAction;
     private static final int ADD_NOTE = 12;
     private static final int REQUEST_AUDIO_PERMISSION = 0;
+    private static final int REQUEST_STORAGE_PERMISSION = 1;
     private LinearLayout mColorPalette;
 
     // TODO: Consider extracting to ViewModel
@@ -301,6 +312,22 @@ public class Reviewer extends AbstractFlashcardViewer {
         ViewGroupUtils.setRenderWorkaround(this);
     }
 
+    public void onSaveWhiteboardAction() {
+        Timber.i("Reviewer:: Save whiteboard button pressed");
+        if (getSdkVersion() < Build.VERSION_CODES.Q && !Permissions.hasStorageAccessPermission(this)) {
+            pendingAction = this::onSaveWhiteboardAction;
+            ActivityCompat.requestPermissions(this, new String[] {Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                    REQUEST_STORAGE_PERMISSION);
+        } else if (mWhiteboard != null) {
+            try {
+                String savedWhiteboardFileName = mWhiteboard.saveWhiteboard(getCol().getTime());
+                UIUtils.showThemedToast(Reviewer.this, getString(R.string.white_board_image_saved, savedWhiteboardFileName), true);
+            } catch (Exception e) {
+                Timber.w(e);
+                UIUtils.showThemedToast(Reviewer.this, getString(R.string.white_board_image_save_failed, e.getLocalizedMessage()), true);
+            }
+        }
+    }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
@@ -363,16 +390,7 @@ public class Reviewer extends AbstractFlashcardViewer {
                 mColorPalette.setVisibility(View.GONE);
             }
         } else if (itemId == R.id.action_save_whiteboard) {
-            Timber.i("Reviewer:: Save whiteboard button pressed");
-            if (mWhiteboard != null) {
-                try {
-                    String savedWhiteboardFileName = mWhiteboard.saveWhiteboard(getCol().getTime());
-                    UIUtils.showThemedToast(Reviewer.this, getString(R.string.white_board_image_saved, savedWhiteboardFileName), true);
-                } catch (Exception e) {
-                    Timber.w(e);
-                    UIUtils.showThemedToast(Reviewer.this, getString(R.string.white_board_image_save_failed, e.getLocalizedMessage()), true);
-                }
-            }
+            onSaveWhiteboardAction();
         } else if (itemId == R.id.action_clear_whiteboard) {
             Timber.i("Reviewer:: Clear whiteboard button pressed");
             if (mWhiteboard != null) {
@@ -525,6 +543,18 @@ public class Reviewer extends AbstractFlashcardViewer {
                 (permissions.length >= 1) && (grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
             // Get get audio record permission, so we can create the record tool bar
             toggleMicToolBar();
+        } else if (requestCode == REQUEST_STORAGE_PERMISSION && permissions.length == 1) {
+            if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                pendingAction.run();
+            } else {
+                UIUtils.showThemedToast(this, R.string.startup_no_storage_permission, false);
+
+                // If user selected don't ask again, open the Android settings page for AnkiDroid so user can grant the
+                // missing permission
+                if (!ActivityCompat.shouldShowRequestPermissionRationale(this, permissions[0])) {
+                    launchApplicationDetailsSettings();
+                }
+            }
         }
     }
 
